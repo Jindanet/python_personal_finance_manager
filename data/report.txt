@@ -1,0 +1,34 @@
+﻿Income & Expense System - Transaction Report
+Generated At : 2026-10-05 12:38:44 (+07:00)
+Data sources : transactions.dat (current records), transactions.log (successful changes)
+Scope        : All current slots, including deleted records
+Currency     : THB
+
+  ID | Date       | Time  | Type    |    Amount | Status  | Last Change | Category
+-----+------------+-------+---------+-----------+---------+-------------+---------
+1001 | 2026-10-01 | 09:00 | Income  | 25,000.00 | Active  | UPDATE      | เงินเดือน/รายได้
+1002 | 2026-10-02 | 12:00 | Expense |     60.00 | Active  | UPDATE      | อาหาร/เครื่องดื่ม
+1003 | 2026-10-02 | 17:30 | Expense |  1,500.00 | Active  | UPDATE      | เดินทาง/น้ำมัน
+1004 | 2026-10-02 | 20:00 | Expense |    498.23 | Active  | UPDATE      | สาธารณูปโภค/ค่าบ้าน
+1005 | 2026-10-03 | 20:45 | Income  |    300.00 | Active  | UPDATE      | เงินเดือน/รายได้
+1006 | 2026-10-03 | 21:00 | Expense |    300.00 | Active  | UPDATE      | อาหาร/เครื่องดื่ม
+1007 | 2026-10-03 | 13:00 | Expense |    250.00 | Active  | UPDATE      | อาหาร/เครื่องดื่ม
+1008 | 2026-10-04 | 22:00 | Expense |    249.51 | Active  | UPDATE      | ช้อปปิ้ง/บันเทิง
+1009 | 2026-10-04 | 12:00 | Expense |     60.00 | Active  | UPDATE      | อาหาร/เครื่องดื่ม
+1010 | 2026-10-05 | 10:00 | Expense |  3,800.00 | Active  | UPDATE      | สาธารณูปโภค/ค่าบ้าน
+1011 | 2026-10-01 | 18:00 | Expense |     50.00 | Active  | UPDATE      | อื่นๆ
+1012 | 2026-09-30 | 19:00 | Income  |    500.00 | Active  | UPDATE      | เงินเดือน/รายได้
+1014 | 2026-10-05 | 11:36 | Expense |     45.00 | Active  | ADD         | อาหาร/เครื่องดื่ม
+1015 | 2026-10-02 | 11:41 | Income  |    500.00 | Active  | ADD         | เงินเดือน/รายได้
+1017 | 2026-10-05 | 12:38 | Expense |    500.00 | Active  | ADD         | อื่นๆ
+1018 | 2026-10-05 | 12:38 | Income  |  1,000.00 | Active  | ADD         | ช้อปปิ้ง/บันเทิง
+-----+------------+-------+---------+-----------+---------+-------------+---------
+
+Summary (active records only for money)
+- Total Records   : 16
+- Active Records  : 16
+- Deleted Records : 0
+- Edited Records  : 12
+- Total Income    : 27,300.00 THB
+- Total Expense   : 7,312.74 THB
+- Balance         : 19,987.26 THB

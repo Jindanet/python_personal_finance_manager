@@ -1,7 +1,7 @@
 import os
 import shutil
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 import constants as c
 import display
 import report
@@ -105,12 +105,15 @@ def add_menu(store, settings):
     if date_value == "":
         date_value = default_date
     service.validate_date(date_value)
+    time_value = input("ป้อนเวลาที่เกิดรายการ (HH:MM, เว้นว่างใช้เวลาปัจจุบัน): ").strip()
+    service.validate_time(time_value)
     type_value = ask_type(settings)
     category = ask_category()
     amount = input("\nป้อนจำนวนเงิน (บาท): ").strip()
     service.validate_amount(amount)
     description = input("บันทึกช่วยจำ (Note, เว้นว่างได้): ").strip()
-    record = service.add_transaction(store, date_value, type_value, category, description, amount)
+    record = service.add_transaction(store, date_value, type_value, category,
+                                     description, amount, time_value)
     message(f'บันทึกรายการ ID {record["transaction_id"]} สำเร็จ', settings)
 
 
@@ -128,12 +131,14 @@ def update_menu(store, settings):
     show_records([current], settings)
     print("\nกด Enter เพื่อคงค่าเดิมในแต่ละช่อง")
     new_date = input(f'วันที่ [{current["date"]}]: ').strip()
+    new_time = input(f'เวลา HH:MM [{current["time"] or "ไม่ระบุ"}]: ').strip()
     new_type = ask_type(settings, current["type_code"])
     new_category = ask_category(current["category"])
     new_amount = input(f'ป้อนจำนวนเงินใหม่ (บาท) [{current["amount"]:,.2f}]: ').strip()
     new_description = input(f'ป้อนบันทึกช่วยจำใหม่ [{current["description"]}]: ').strip()
     record = service.update_transaction(store, transaction_id,
-        date=keep_old_value(new_date), type_value=new_type, category=new_category,
+        date=keep_old_value(new_date), time_value=keep_old_value(new_time),
+        type_value=new_type, category=new_category,
         description=keep_old_value(new_description), amount=keep_old_value(new_amount))
     message(f'แก้ไขรายการ ID {record["transaction_id"]} สำเร็จ', settings)
 
@@ -185,6 +190,96 @@ def file_statistics(store, settings):
     print(f'ช่องว่างที่ใช้ซ้ำได้ (Free-list): {totals["free_slots"]}')
 
 
+def view_log_menu(store, settings):
+    print_title("OPERATION LOG (ประวัติการทำงาน)", settings)
+    value = input("จำนวนรายการล่าสุด [Enter = 20, 0 = ทั้งหมด]: ").strip()
+    if value == "":
+        limit = 20
+    elif value.isdecimal():
+        limit = int(value)
+    else:
+        raise ValueError("กรุณาใส่จำนวนเต็มตั้งแต่ 0 ขึ้นไป")
+    records = storage.read_logs(store, None if limit == 0 else limit)
+    if not records:
+        message("ยังไม่มีประวัติการทำงาน", settings, "INFO", terminal.YELLOW)
+        return
+    columns = [("Seq", 8, "right"), ("Time (+07)", 19, "left"),
+               ("Action", 6, "left"), ("ID", 10, "right"), ("Result", 7, "left")]
+    heading, separator = display.table_heading(columns)
+    print(heading)
+    print(separator)
+    local_time = timezone(timedelta(hours=7))
+    for record in reversed(records):
+        timestamp = datetime.fromtimestamp(record["timestamp"], local_time).strftime("%Y-%m-%d %H:%M:%S")
+        operation = c.OPERATION_LABELS.get(record["op_code"], str(record["op_code"]))
+        transaction_id = record["transaction_id"] or "-"
+        result = "SUCCESS" if record["result"] else "FAIL"
+        print(display.table_row((record["log_seq"], timestamp, operation,
+                                 transaction_id, result), columns))
+        if record["type_after"]:
+            type_name = c.TYPE_LABELS.get(record["type_after"], str(record["type_after"]))
+            status_name = c.STATUS_LABELS.get(record["status_after"], str(record["status_after"]))
+            print(f'    หลังทำรายการ: {type_name}, {status_name}, {record["amount_after"]:,.2f} THB')
+    print(f"\nแสดงล่าสุด {len(records)} จากทั้งหมด {storage.log_header(store)['total_records']} รายการ")
+
+
+def view_index_menu(store, settings):
+    print_title("TRANSACTION INDEX (ดัชนีรายการ)", settings)
+    value = input("จำนวน ID ล่าสุด [Enter = 20, 0 = ทั้งหมด]: ").strip()
+    if value == "":
+        limit = 20
+    elif value.isdecimal():
+        limit = int(value)
+    else:
+        raise ValueError("กรุณาใส่จำนวนเต็มตั้งแต่ 0 ขึ้นไป")
+    records = storage.read_index(store)
+    if not records:
+        message("ยังไม่มีรายการในดัชนี", settings, "INFO", terminal.YELLOW)
+        return
+    selected = records if limit == 0 else records[-limit:]
+    columns = [("ID", 10, "right"), ("Slot", 8, "right"),
+               ("Status", 8, "left"), ("DAT Offset", 12, "right")]
+    heading, separator = display.table_heading(columns)
+    print(heading)
+    print(separator)
+    for record in reversed(selected):
+        status = c.STATUS_LABELS.get(record["status"], str(record["status"]))
+        offset = c.HEADER_SIZE + record["slot_no"] * c.TRANSACTION_SIZE
+        print(display.table_row((record["transaction_id"], record["slot_no"],
+                                 status, offset), columns))
+    print(f"\nแสดง ID ล่าสุด {len(selected)} จากทั้งหมด {len(records)} รายการ")
+
+
+def view_data_file_menu(store, settings):
+    print_title("DATA FILE CONTENTS (transactions.dat)", settings)
+    header = storage.data_header(store)
+    print("ไฟล์          : " + store["data_path"])
+    print("ชนิดไฟล์      : Binary (ถอดรหัสเพื่อแสดงผล)")
+    print(f'Header magic  : {header["magic"].decode("ascii")}')
+    print(f'Format version: {header["version"]}')
+    print(f'Header        : {c.HEADER_SIZE} bytes; record ละ {header["record_size"]} bytes')
+    print(f'จำนวนระเบียน  : {header["total_records"]} (Active {header["active_records"]}, Deleted {header["deleted_records"]})')
+    print(f'Free-list head: {header["aux_value"]}')
+    updated = datetime.fromtimestamp(header["updated_at"], timezone(timedelta(hours=7)))
+    print(f'Header update : {updated:%Y-%m-%d %H:%M:%S} (+07:00)')
+    print("-" * screen_width())
+    if not header["total_records"]:
+        print("ยังไม่มีรายการใน transactions.dat")
+        return
+    for slot in range(header["total_records"]):
+        record = storage.read_data_slot(store, slot)
+        offset = c.HEADER_SIZE + slot * c.TRANSACTION_SIZE
+        print(f'Slot {slot} | DAT Offset {offset} | ID {record["transaction_id"]} | Status {c.STATUS_LABELS[record["status"]]}')
+        print(f'  Date/Time   : {record["date"]} {record["time"] or "--:--"}')
+        print(f'  Type        : {c.TYPE_LABELS[record["type_code"]]} (code {record["type_code"]})')
+        print(f'  Category    : {record["category"]}')
+        print(f'  Description : {record["description"] or "-"}')
+        print(f'  Amount      : {record["amount"]:,.2f} THB')
+        print(f'  Next free   : {record["next_free"]} (slot; -1 = ไม่มี)')
+        if slot < header["total_records"] - 1:
+            print("-" * screen_width())
+
+
 def view_menu(store, settings):
     while True:
         print_title("VIEW TRANSACTIONS (ดูรายการ/สถิติการเงิน)", settings)
@@ -196,9 +291,12 @@ def view_menu(store, settings):
         print("6) กรองตามวันที่")
         print("7) สรุปการเงิน")
         print("8) ดูรายการทั้งหมดรวมรายการที่ลบ")
+        print("9) ดูประวัติการทำงาน (transactions.log)")
+        print("10) ดูดัชนีรายการ (transactions.idx)")
+        print("11) ดูข้อมูลทุกฟิลด์ในไฟล์ (transactions.dat)")
         print("0) ย้อนกลับ")
         print("-" * screen_width())
-        choice = input("เลือกเมนูย่อย (0-8): ").strip()
+        choice = input("เลือกเมนูย่อย (0-11): ").strip()
         try:
             if choice == "1":
                 print_title("TRANSACTIONS LIST (รายการทั้งหมด)", settings)
@@ -220,19 +318,44 @@ def view_menu(store, settings):
                 summary_menu(store, settings)
             elif choice == "8":
                 show_records(service.view_all(store, include_deleted=True), settings)
+            elif choice == "9":
+                view_log_menu(store, settings)
+            elif choice == "10":
+                view_index_menu(store, settings)
+            elif choice == "11":
+                view_data_file_menu(store, settings)
             elif choice == "0":
                 return
             else:
-                raise ValueError("กรุณาเลือกเมนู 0-8")
+                raise ValueError("กรุณาเลือกเมนู 0-11")
         except (ValueError, LookupError, OSError) as error:
             show_error(error, settings)
         pause("\nกด Enter เพื่อตกลง...")
 
 
 def generate_report_menu(store, settings):
-    print_title("GENERATE REPORT (สร้างรายงาน .txt)", settings)
-    path = report.generate_report(store)
-    message("สร้างไฟล์รายงานสรุปผลการเงินสำเร็จที่:\n" + os.path.abspath(path), settings)
+    while True:
+        print_title("GENERATE REPORTS (เลือกรายงาน .txt)", settings)
+        print("1) รายการธุรกรรม       report.txt")
+        print("2) สรุปรายเดือน         monthly_report.txt")
+        print("3) สรุปตามหมวดหมู่     category_report.txt")
+        print("4) สร้างทั้งหมด 3 ไฟล์")
+        print("0) กลับเมนูหลัก")
+        print("-" * screen_width())
+        choice = input("เลือกรายงาน (0-4): ").strip()
+        if choice == "0":
+            return
+        try:
+            if choice in ("1", "2", "3"):
+                paths = [report.generate_selected_report(store, choice)]
+            elif choice == "4":
+                paths = report.generate_all_reports(store)
+            else:
+                raise ValueError("กรุณาเลือกเมนู 0-4")
+            message("สร้างรายงานสำเร็จ:\n" + "\n".join(os.path.abspath(path) for path in paths), settings)
+        except (ValueError, LookupError, OSError) as error:
+            show_error(error, settings)
+        pause("\nกด Enter เพื่อเลือกรายงานต่อ...")
 
 
 def run_menu(store, settings=None):
@@ -245,7 +368,7 @@ def run_menu(store, settings=None):
         print("(2) [Update]  (แก้ไขข้อมูลรายการ)")
         print("(3) [Delete]  (ลบรายการ)")
         print("(4) [View]  (ดูรายการ)")
-        print("(5) [Generate Report] (.txt)")
+        print("(5) [Generate Reports] (เลือก 1 ไฟล์ หรือทั้งหมด)")
         print("(0) [Exit]  (ออกจากโปรแกรม)")
         print("=" * screen_width())
         choice = input("เลือกทำรายการ (0-5): ").strip()
@@ -261,10 +384,10 @@ def run_menu(store, settings=None):
                 continue
             elif choice == "5":
                 generate_report_menu(store, settings)
+                continue
             elif choice == "0":
                 if store["changed_since_report"]:
-                    path = report.generate_report(store)
-                    message("สร้างรายงานล่าสุดอัตโนมัติ\n" + path, settings)
+                    message("มีข้อมูลเปลี่ยนหลังสร้างรายงานบางไฟล์ เมื่อต้องการรายงานล่าสุดให้ใช้เมนู 5", settings, "INFO", terminal.YELLOW)
                 service.record_exit(store)
                 message("ปิดระบบอย่างปลอดภัย บันทึกข้อมูลเรียบร้อยแล้ว", settings, "SYSTEM")
                 return

@@ -1,1 +1,0 @@
-# python_personal_finance_manager

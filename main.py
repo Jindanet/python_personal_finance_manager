@@ -21,11 +21,11 @@ def seed_thai_demo(store):
     if storage.data_header(store)["total_records"] > 0:
         return False
     today = date.today()
-    service.add_transaction(store, str(today), "1", "เงินเดือน", "เงินเดือนประจำเดือน", "25000")
-    service.add_transaction(store, str(today), "2", "อาหาร", "ข้าวเย็นกับเพื่อน", "159")
-    service.add_transaction(store, str(today - timedelta(days=1)), "2", "ค่าเดินทาง", "เติมน้ำมันรถ", "800")
-    service.add_transaction(store, str(today - timedelta(days=2)), "1", "ขายสินค้า", "รายได้จากการขายสินค้าออนไลน์", "1500")
-    service.add_transaction(store, str(today), "2", "ของใช้", "ซื้อสบู่และยาสระผม", "245.50")
+    service.add_transaction(store, str(today), "1", "เงินเดือน", "เงินเดือนประจำเดือน", "25000", "09:00")
+    service.add_transaction(store, str(today), "2", "อาหาร", "ข้าวเย็นกับเพื่อน", "159", "20:00")
+    service.add_transaction(store, str(today - timedelta(days=1)), "2", "ค่าเดินทาง", "เติมน้ำมันรถ", "800", "18:30")
+    service.add_transaction(store, str(today - timedelta(days=2)), "1", "ขายสินค้า", "รายได้จากการขายสินค้าออนไลน์", "1500", "14:15")
+    service.add_transaction(store, str(today), "2", "ของใช้", "ซื้อสบู่และยาสระผม", "245.50", "16:45")
     return True
 
 
@@ -39,7 +39,7 @@ def run_demo(store):
     print(f'Total Income  : {totals["total_income"]:,.2f} THB')
     print(f'Total Expense : {totals["total_expense"]:,.2f} THB')
     print(f'Balance       : {totals["balance"]:,.2f} THB')
-    print("Report generated: " + report.generate_report(store))
+    print("Reports generated:\n" + "\n".join(report.generate_all_reports(store)))
     print("Thai UTF-8 round-trip completed successfully.")
 
 

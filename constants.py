@@ -3,10 +3,12 @@ import struct
 APP_NAME = "Personal Income and Expense Management System"
 APP_VERSION = "1.0"
 FILE_VERSION = 1
+DATA_FILE_VERSION = 2
 
 # ขนาดและลำดับ field ต้องตรงกันทั้งตอน pack และ unpack
 HEADER_FORMAT = "<8sHHIIIiq"
-TRANSACTION_FORMAT = "<I10sB60s180sdBi"
+TRANSACTION_FORMAT_V1 = "<I10sB60s180sdBi"
+TRANSACTION_FORMAT = "<I10s5sB60s180sdBi"
 INDEX_FORMAT = "<IIB3x"
 LOG_FORMAT = "<IqBIBBBd4x"
 HEADER_SIZE = struct.calcsize(HEADER_FORMAT)
@@ -21,8 +23,11 @@ DATA_FILE_NAME = "transactions.dat"
 INDEX_FILE_NAME = "transactions.idx"
 LOG_FILE_NAME = "transactions.log"
 REPORT_FILE_NAME = "report.txt"
+MONTHLY_REPORT_FILE_NAME = "monthly_report.txt"
+CATEGORY_REPORT_FILE_NAME = "category_report.txt"
 
 DATE_BYTES = 10
+TIME_BYTES = 5
 CATEGORY_BYTES = 60
 DESCRIPTION_BYTES = 180
 TYPE_NONE = 0

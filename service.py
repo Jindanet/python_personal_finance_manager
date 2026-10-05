@@ -1,5 +1,5 @@
 import math
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import constants as c
 import codec
 import storage
@@ -21,6 +21,19 @@ def validate_date(value):
     except ValueError:
         raise ValueError("Date must be a real date in YYYY-MM-DD format")
     return parsed.strftime("%Y-%m-%d")
+
+
+def validate_time(value):
+    value = str(value).strip()
+    if value == "":
+        return ""
+    try:
+        parsed = datetime.strptime(value, "%H:%M")
+    except ValueError:
+        raise ValueError("Time must be in HH:MM format (00:00-23:59)")
+    if parsed.strftime("%H:%M") != value:
+        raise ValueError("Time must be in HH:MM format (00:00-23:59)")
+    return value
 
 
 def validate_type(value):
@@ -59,21 +72,26 @@ def validate_amount(value):
     return amount
 
 
-def add_transaction(store, date, type_value, category, description, amount):
+def add_transaction(store, date, type_value, category, description, amount, time_value=""):
     date = validate_date(date)
+    if str(time_value).strip() == "":
+        time_value = datetime.now(timezone(timedelta(hours=7))).strftime("%H:%M")
+    time_value = validate_time(time_value)
     type_code = validate_type(type_value)
     category = validate_text(category, "Category", c.CATEGORY_BYTES)
     description = validate_text(description, "Description", c.DESCRIPTION_BYTES, False)
     amount = validate_amount(amount)
-    return storage.add_transaction(store, date, type_code, category, description, amount)
+    return storage.add_transaction(store, date, type_code, category, description, amount, time_value)
 
 
 def update_transaction(store, transaction_id, date=None, type_value=None,
-                       category=None, description=None, amount=None):
+                       category=None, description=None, amount=None, time_value=None):
     transaction_id = validate_transaction_id(transaction_id)
     record = storage.get_transaction(store, transaction_id)
     if date is not None:
         record["date"] = validate_date(date)
+    if time_value is not None:
+        record["time"] = validate_time(time_value)
     if type_value is not None:
         record["type_code"] = validate_type(type_value)
     if category is not None:

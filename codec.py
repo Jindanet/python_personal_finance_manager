@@ -39,7 +39,8 @@ def unpack_header(raw):
 
 def pack_transaction(record):
     return struct.pack(c.TRANSACTION_FORMAT, record["transaction_id"],
-                       pack_text(record["date"], c.DATE_BYTES), record["type_code"],
+                       pack_text(record["date"], c.DATE_BYTES),
+                       pack_text(record["time"], c.TIME_BYTES), record["type_code"],
                        pack_text(record["category"], c.CATEGORY_BYTES),
                        pack_text(record["description"], c.DESCRIPTION_BYTES),
                        record["amount"], record["status"], record["next_free"])
@@ -47,6 +48,13 @@ def pack_transaction(record):
 
 def unpack_transaction(raw):
     values = struct.unpack(c.TRANSACTION_FORMAT, raw)
+    return models.make_transaction(values[0], unpack_text(values[1]), values[3],
+                                   unpack_text(values[4]), unpack_text(values[5]),
+                                   values[6], values[7], values[8], unpack_text(values[2]))
+
+
+def unpack_transaction_v1(raw):
+    values = struct.unpack(c.TRANSACTION_FORMAT_V1, raw)
     return models.make_transaction(values[0], unpack_text(values[1]), values[2],
                                    unpack_text(values[3]), unpack_text(values[4]),
                                    values[5], values[6], values[7])

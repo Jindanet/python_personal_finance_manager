@@ -1,4 +1,5 @@
 import os
+import shutil
 import struct
 import time
 import constants as c
@@ -11,15 +12,16 @@ def sync_file(file):
     os.fsync(file.fileno())
 
 
-def create_file(path, magic, record_size, aux):
+def create_file(path, magic, record_size, aux, version=c.FILE_VERSION):
     if not os.path.exists(path):
         header = models.make_header(magic, record_size, aux=aux)
+        header["version"] = version
         with open(path, "xb") as file:
             file.write(codec.pack_header(header))
             sync_file(file)
 
 
-def read_header(path, magic, record_size):
+def read_header(path, magic, record_size, version=c.FILE_VERSION):
     size = os.path.getsize(path)
     if size < c.HEADER_SIZE:
         raise ValueError("Incomplete header: " + os.path.basename(path))
@@ -27,7 +29,7 @@ def read_header(path, magic, record_size):
         header = codec.unpack_header(file.read(c.HEADER_SIZE))
     if header["magic"] != magic:
         raise ValueError("Invalid magic: " + os.path.basename(path))
-    if header["version"] != c.FILE_VERSION:
+    if header["version"] != version:
         raise ValueError("Unsupported file version")
     if header["record_size"] != record_size:
         raise ValueError("Invalid record size")
@@ -49,7 +51,7 @@ def write_header(path, header):
 
 
 def data_header(store):
-    return read_header(store["data_path"], c.DATA_MAGIC, c.TRANSACTION_SIZE)
+    return read_header(store["data_path"], c.DATA_MAGIC, c.TRANSACTION_SIZE, c.DATA_FILE_VERSION)
 
 
 def index_header(store):
@@ -58,6 +60,34 @@ def index_header(store):
 
 def log_header(store):
     return read_header(store["log_path"], c.LOG_MAGIC, c.LOG_SIZE)
+
+
+def migrate_data_v1(path):
+    with open(path, "rb") as file:
+        header = codec.unpack_header(file.read(c.HEADER_SIZE))
+    if header["magic"] != c.DATA_MAGIC or header["version"] != 1:
+        return
+    old_size = struct.calcsize(c.TRANSACTION_FORMAT_V1)
+    header = read_header(path, c.DATA_MAGIC, old_size, 1)
+    backup = path + ".v1.bak"
+    temporary = path + ".v2.tmp"
+    if not os.path.exists(backup):
+        shutil.copy2(path, backup)
+    header["version"] = c.DATA_FILE_VERSION
+    header["record_size"] = c.TRANSACTION_SIZE
+    try:
+        with open(path, "rb") as source, open(temporary, "wb") as target:
+            source.seek(c.HEADER_SIZE)
+            target.write(codec.pack_header(header))
+            for _ in range(header["total_records"]):
+                old = codec.unpack_transaction_v1(source.read(old_size))
+                target.write(codec.pack_transaction(old))
+            sync_file(target)
+        os.replace(temporary, path)
+    except Exception:
+        if os.path.exists(temporary):
+            os.remove(temporary)
+        raise
 
 
 def open_storage(data_dir="data"):
@@ -70,8 +100,10 @@ def open_storage(data_dir="data"):
         "log_path": os.path.join(data_dir, c.LOG_FILE_NAME),
         "changed_since_report": False,
     }
-    create_file(store["data_path"], c.DATA_MAGIC, c.TRANSACTION_SIZE, c.NO_FREE_SLOT)
+    create_file(store["data_path"], c.DATA_MAGIC, c.TRANSACTION_SIZE,
+                c.NO_FREE_SLOT, c.DATA_FILE_VERSION)
     create_file(store["log_path"], c.LOG_MAGIC, c.LOG_SIZE, 1)
+    migrate_data_v1(store["data_path"])
     data_header(store)
     log_header(store)
     try:
@@ -247,12 +279,13 @@ def find_next_id(store):
     return highest + 1
 
 
-def add_transaction(store, date, type_code, category, description, amount):
+def add_transaction(store, date, type_code, category, description, amount, time_value=""):
     transaction_id = store["next_id"]
     if transaction_id > 4294967295:
         raise ValueError("Transaction IDs are exhausted")
     header = data_header(store)
-    record = models.make_transaction(transaction_id, date, type_code, category, description, amount)
+    record = models.make_transaction(transaction_id, date, type_code, category,
+                                     description, amount, time_value=time_value)
     index = read_index(store)
     if header["aux_value"] != c.NO_FREE_SLOT:
         slot = header["aux_value"]

@@ -19,10 +19,11 @@ def make_header(magic, record_size, total=0, active=0, deleted=0, aux=-1):
 
 
 def make_transaction(transaction_id, date, type_code, category, description, amount,
-                     status=1, next_free=-1):
+                     status=1, next_free=-1, time_value=""):
     return {
         "transaction_id": transaction_id,
         "date": date,
+        "time": time_value,
         "type_code": type_code,
         "category": category,
         "description": description,
